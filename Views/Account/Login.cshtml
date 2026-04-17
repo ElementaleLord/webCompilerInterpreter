@@ -1,0 +1,36 @@
+﻿@{
+    ViewData["Title"] = "Log in";
+    var postedUsername = ViewData["Username"] as string ?? string.Empty;
+}
+
+<h1>Log in</h1>
+
+<form asp-action="Login" method="post">
+    <div>
+        <label>Username<br />
+            <input name="username" value="@postedUsername" />
+        </label>
+    </div>
+    <div>
+        <label>Password<br />
+            <input name="password" type="password" />
+        </label>
+    </div>
+
+    <div>
+        <button type="submit">Log in</button>
+        &nbsp;
+        <a href="/Account/Register">Don't have an account? Register</a>
+    </div>
+
+    @* Display model errors *@
+    @if (!ViewData.ModelState.IsValid)
+    {
+        <ul>
+            @foreach (var m in ViewData.ModelState.Values.SelectMany(v => v.Errors))
+            {
+                <li>@m.ErrorMessage</li>
+            }
+        </ul>
+    }
+</form>

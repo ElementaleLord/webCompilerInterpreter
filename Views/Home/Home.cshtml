@@ -1,0 +1,27 @@
+﻿@using Microsoft.AspNetCore.Http
+@{
+    ViewData["Title"] = "Home";
+    Layout = "_Layout";
+
+    var isLoggedIn = Context.Session.GetString("IsLoggedIn") == "true";
+    var username = Context.Session.GetString("Username");
+}
+
+<h1>Home</h1>
+
+@if (isLoggedIn)
+{
+    <p>Welcome, @username!</p>
+    <p>
+        <a class="btn" href="/Compiler">Go to Compiler</a>
+    </p>
+}
+else
+{
+    <p>Welcome — register or log in to use the compiler.</p>
+    <p>
+        <a class="btn" href="/Account/Register">Register</a>
+        &nbsp;
+        <a class="btn" href="/Account/Login">Log in</a>
+    </p>
+}

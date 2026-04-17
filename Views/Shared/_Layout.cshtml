@@ -1,0 +1,138 @@
+﻿@using Microsoft.AspNetCore.Http
+@{
+    var title = ViewData["Title"] as string ?? "App";
+    var isLoggedIn = Context.Session.GetString("IsLoggedIn") == "true";
+    var username = Context.Session.GetString("Username") ?? "";
+}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@title</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+
+    <style>
+        /* Put the app's shared CSS here (copied from Compiler view). */
+        :root {
+            --bg: #080c10;
+            --surface: #0e1420;
+            --border: #1e2d40;
+            --accent: #00e5ff;
+            --accent-dim: rgba(0, 229, 255, 0.12);
+            --text: #cdd6e0;
+            --muted: #445566;
+            --success: #00e5a0;
+            --error: #ff4f4f;
+            --font-code: 'JetBrains Mono', monospace;
+            --font-ui: 'Chakra Petch', sans-serif;
+            --radius: 4px;
+        }
+
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        html, body {
+            height: 100%;
+            background: var(--bg);
+            color: var(--text);
+            font-family: var(--font-code);
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        body::after {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background: repeating-linear-gradient(
+                0deg,
+                transparent 0px, transparent 3px,
+                rgba(0,0,0,0.06) 3px, rgba(0,0,0,0.06) 4px
+            );
+            pointer-events: none;
+            z-index: 9999;
+        }
+
+        .shell {
+            display: grid;
+            grid-template-rows: 52px 1fr;
+            min-height: 100vh;
+        }
+
+        header {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 0 28px;
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .logo {
+            font-family: var(--font-ui);
+            font-size: 18px;
+            letter-spacing: .12em;
+            color: var(--accent);
+            text-shadow: 0 0 18px rgba(0,229,255,.45);
+        }
+
+        .logo span { color: var(--text); font-size: 12px; letter-spacing: .2em; opacity: .5; }
+
+        .header-nav {
+            margin-left: auto;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .header-link {
+            color: var(--muted);
+            text-decoration: none;
+            font-family: var(--font-ui);
+            letter-spacing: .06em;
+            font-size: 13px;
+        }
+
+        .header-link:hover { color: var(--accent); }
+
+        /* Minimal layout scaffold; views will provide the page content */
+        main { display: block; }
+    </style>
+
+    @RenderSection("Styles", required: false)
+</head>
+<body>
+    <div class="shell">
+        <header>
+            <div class="logo">REPL <span>// online compiler</span></div>
+
+            <nav class="header-nav">
+                <a class="header-link" href="/">Home</a>
+
+                @if (!isLoggedIn)
+                {
+                    <a class="header-link" href="/Account/Register">Register</a>
+                    <a class="header-link" href="/Account/Login">Log in</a>
+                }
+                else
+                {
+                    <a class="header-link" href="/Compiler">Compiler</a>
+
+                    <form method="post" asp-controller="Account" asp-action="Logout" style="display:inline;">
+                        @Html.AntiForgeryToken()
+                        <button type="submit" style="background:none;border:none;color:var(--muted);cursor:pointer;">Log out</button>
+                    </form>
+                }
+            </nav>
+        </header>
+
+        <main>
+            @RenderBody()
+        </main>
+    </div>
+
+    @RenderSection("Scripts", required: false)
+</body>
+</html>
