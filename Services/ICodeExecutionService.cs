@@ -1,6 +1,6 @@
 using webCompilerInterpreter.Models;
 
-namespace OnlineCompiler.Services
+namespace webCompilerInterpreter.Services
 {
     public interface ICodeExecutionService
     {

@@ -1,5 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
-using OnlineCompiler.Services;
+using webCompilerInterpreter.Services;
 using webCompilerInterpreter.Models;
 
 namespace webCompilerInterpreter.Controllers
@@ -18,7 +18,6 @@ namespace webCompilerInterpreter.Controllers
         {
             var model = new CompilerViewModel
             {
-                // Pre-select python since its the default language
                 SelectedLanguage= "python",
                 Code= string.Empty,
                 Output= null,
