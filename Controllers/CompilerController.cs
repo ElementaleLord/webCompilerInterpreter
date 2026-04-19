@@ -11,7 +11,6 @@ namespace webCompilerInterpreter.Controllers
         {
             _executionService = executionService;
         }
-
         // GET /Compiler
         [HttpGet]
         public IActionResult Index()
@@ -24,7 +23,6 @@ namespace webCompilerInterpreter.Controllers
             };
             return View(model);
         }
-
         // POST /Compiler/Run
         [HttpPost]
         [ValidateAntiForgeryToken]
@@ -39,12 +37,10 @@ namespace webCompilerInterpreter.Controllers
 
                 return View("Index", model);
             }
-
             // use the service to execute 
             ExecutionResult result = await _executionService.ExecuteAsync
                 (model.Code, model.SelectedLanguage);
-            // trivia: suing await frees the server for other requests
-
+            // NOTE: using await like this frees the server for other requests
             // fill the model and return its view
             model.Output= result.Output;
             model.IsError= result.IsError;
