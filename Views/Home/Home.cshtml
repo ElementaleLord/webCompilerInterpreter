@@ -1,27 +1,147 @@
-﻿@using Microsoft.AspNetCore.Http
+@using Microsoft.AspNetCore.Http
 @{
-    ViewData["Title"] = "Home";
+    ViewData["Title"]= "Home";
     Layout = "_Layout";
-
-    var isLoggedIn = Context.Session.GetString("IsLoggedIn") == "true";
-    var username = Context.Session.GetString("Username");
+    var isLoggedIn= Context.Session.GetString("IsLoggedIn") == "true";
+    var username= Context.Session.GetString("Username");
 }
-
-<h1>Home</h1>
-
-@if (isLoggedIn)
+@section Styles
 {
-    <p>Welcome, @username!</p>
-    <p>
-        <a class="btn" href="/Compiler">Go to Compiler</a>
-    </p>
+<style>
+    .home-shell
+    {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: calc(100vh - 52px);
+        padding: 40px 24px;
+        text-align: center;
+    }
+    .home-title
+    {
+        font-family: var(--font-ui);
+        font-size: clamp(28px, 6vw, 52px);
+        letter-spacing: .12em;
+        color: var(--accent);
+        text-shadow: 0 0 32px rgba(0,229,255,.4);
+        margin-bottom: 12px;
+        text-transform: uppercase;
+    }
+    .home-sub
+    {
+        font-size: 14px;
+        color: var(--muted);
+        letter-spacing: .08em;
+        margin-bottom: 48px;
+    }
+    .home-welcome
+    {
+        font-size: 15px;
+        color: var(--text);
+        margin-bottom: 32px;
+    }
+    .home-welcome span
+    {
+        color: var(--accent);
+        font-family: var(--font-ui);
+        letter-spacing: .06em;
+    }
+    .home-actions
+    {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+        justify-content: center;
+    }
+    .btn-primary
+    {
+        font-family: var(--font-ui);
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: .18em;
+        text-transform: uppercase;
+        background: var(--accent);
+        color: var(--bg);
+        border: none;
+        padding: 12px 32px;
+        cursor: pointer;
+        text-decoration: none;
+        clip-path: polygon(10px 0%, 100% 0%, calc(100% - 10px) 100%, 0% 100%);
+        transition: box-shadow .2s, transform .1s;
+        display: inline-block;
+    }
+    .btn-primary:hover
+    {
+        box-shadow: 0 0 24px rgba(0,229,255,.5);
+        transform: translateY(-1px);
+    }
+    .btn-primary:active
+    {
+        transform: translateY(0);
+    }
+    .btn-secondary
+    {
+        font-family: var(--font-ui);
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: .18em;
+        text-transform: uppercase;
+        background: transparent;
+        color: var(--accent);
+        border: 1px solid var(--accent);
+        padding: 11px 32px;
+        cursor: pointer;
+        text-decoration: none;
+        display: inline-block;
+        transition: background .15s, box-shadow .2s, transform .1s;
+    }
+    .btn-secondary:hover
+    {
+        background: var(--accent-dim);
+        box-shadow: 0 0 16px rgba(0,229,255,.2);
+        transform: translateY(-1px);
+    }
+    .btn-secondary:active
+    {
+        transform: translateY(0);
+    }
+    .home-divider
+    {
+        width: 60px;
+        height: 1px;
+        background: var(--border);
+        margin: 40px auto;
+    }
+    .home-note
+    {
+        font-size: 12px;
+        color: var(--muted);
+        max-width: 360px;
+        line-height: 1.8;
+    }
+</style>
 }
-else
-{
-    <p>Welcome — register or log in to use the compiler.</p>
-    <p>
-        <a class="btn" href="/Account/Register">Register</a>
-        &nbsp;
-        <a class="btn" href="/Account/Login">Log in</a>
-    </p>
-}
+<div class="home-shell">
+    <div class="home-title">Online Compiler</div>
+    <div class="home-sub">// write • run • iterate</div>
+    @if (isLoggedIn)
+    {// Display welcome message and compiler link for logged-in users
+        <p class="home-welcome">Welcome back, <span>@username</span></p>
+        <div class="home-actions">
+            <a class="btn-primary" href="/Compiler">Open Compiler</a>
+        </div>
+    }
+    else
+    {// otherwise show Register and Login links instead
+        <div class="home-actions">
+            <a class="btn-primary"    href="/Account/Register">Register</a>
+            <a class="btn-secondary"  href="/Account/Login">Log in</a>
+        </div>
+        <div class="home-divider"></div>
+        <p class="home-note">
+            Write and run code directly in your browser.
+            Register or log in to get started.
+        </p>
+    }
+</div>

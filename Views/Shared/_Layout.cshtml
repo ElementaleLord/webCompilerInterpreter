@@ -10,13 +10,11 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>@title</title>
-
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
-
     <style>
-        /* Put the app's shared CSS here (copied from Compiler view). */
-        :root {
+        :root
+        {
             --bg: #080c10;
             --surface: #0e1420;
             --border: #1e2d40;
@@ -30,10 +28,14 @@
             --font-ui: 'Chakra Petch', sans-serif;
             --radius: 4px;
         }
-
-        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-        html, body {
+        *, *::before, *::after
+        {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        html, body
+        {
             height: 100%;
             background: var(--bg);
             color: var(--text);
@@ -41,26 +43,22 @@
             font-size: 14px;
             line-height: 1.6;
         }
-
-        body::after {
+        body::after
+        {
             content: '';
             position: fixed;
             inset: 0;
-            background: repeating-linear-gradient(
-                0deg,
-                transparent 0px, transparent 3px,
-                rgba(0,0,0,0.06) 3px, rgba(0,0,0,0.06) 4px
-            );
+            background: repeating-linear-gradient( 0deg, transparent 0px, transparent 3px,
+                rgba(0,0,0,0.06) 3px, rgba(0,0,0,0.06) 4px);
             pointer-events: none;
             z-index: 9999;
         }
-
-        .shell {
+        .shell
+        {
             display: grid;
             grid-template-rows: 52px 1fr;
             min-height: 100vh;
         }
-
         header {
             display: flex;
             align-items: center;
@@ -69,55 +67,59 @@
             background: var(--surface);
             border-bottom: 1px solid var(--border);
         }
-
-        .logo {
+        .logo
+        {
             font-family: var(--font-ui);
             font-size: 18px;
             letter-spacing: .12em;
             color: var(--accent);
             text-shadow: 0 0 18px rgba(0,229,255,.45);
         }
-
-        .logo span { color: var(--text); font-size: 12px; letter-spacing: .2em; opacity: .5; }
-
-        .header-nav {
+        .logo span
+        {
+            color: var(--text);
+            font-size: 12px;
+            letter-spacing: .2em;
+            opacity: .5;
+        }
+        .header-nav
+        {
             margin-left: auto;
             display: flex;
             gap: 12px;
             align-items: center;
         }
-
-        .header-link {
+        .header-link
+        {
             color: var(--muted);
             text-decoration: none;
             font-family: var(--font-ui);
             letter-spacing: .06em;
             font-size: 13px;
         }
-
-        .header-link:hover { color: var(--accent); }
-
-        /* Minimal layout scaffold; views will provide the page content */
-        main { display: block; }
+        .header-link:hover
+        {
+            color: var(--accent);
+        }
+        main {
+            display: block;
+        }
     </style>
-
     @RenderSection("Styles", required: false)
 </head>
 <body>
     <div class="shell">
         <header>
-            <div class="logo">REPL <span>// online compiler</span></div>
-
+            <div class="logo">Online Compiler</div>
             <nav class="header-nav">
                 <a class="header-link" href="/">Home</a>
-
                 @if (!isLoggedIn)
-                {
+                {// Show Register and Login links if the user is not logged in
                     <a class="header-link" href="/Account/Register">Register</a>
                     <a class="header-link" href="/Account/Login">Log in</a>
                 }
                 else
-                {
+                {// otherwise show the Compiler link and a Log out button instead
                     <a class="header-link" href="/Compiler">Compiler</a>
 
                     <form method="post" asp-controller="Account" asp-action="Logout" style="display:inline;">
@@ -127,12 +129,10 @@
                 }
             </nav>
         </header>
-
         <main>
             @RenderBody()
         </main>
     </div>
-
     @RenderSection("Scripts", required: false)
 </body>
 </html>
