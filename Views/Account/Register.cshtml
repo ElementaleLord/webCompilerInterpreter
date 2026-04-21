@@ -1,41 +1,192 @@
-﻿@{
+@{
     ViewData["Title"] = "Register";
+    // Re-fill fields on POST-back with validation errors
     var postedUsername = ViewData["Username"] as string ?? string.Empty;
+    var postedEmail    = ViewData["Email"]    as string ?? string.Empty;
+    Layout = "_Layout";
 }
-
-<h1>Register</h1>
-
-<form asp-action="Register" method="post">
-    <div>
-        <label>Username<br />
-            <input name="username" value="@postedUsername" />
-        </label>
-    </div>
-    <div>
-        <label>Password<br />
-            <input name="password" type="password" />
-        </label>
-    </div>
-    <div>
-        <label>Confirm Password<br />
-            <input name="confirmPassword" type="password" />
-        </label>
-    </div>
-
-    <div>
-        <button type="submit">Create account</button>
-        &nbsp;
-        <a href="/Account/Login">Already have an account? Log in</a>
-    </div>
-
-    @* Display model errors *@
-    @if (!ViewData.ModelState.IsValid)
+@section Styles
+{
+<style>
+    .auth-shell
     {
-        <ul>
-            @foreach (var m in ViewData.ModelState.Values.SelectMany(v => v.Errors))
-            {
-                <li>@m.ErrorMessage</li>
-            }
-        </ul>
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: calc(100vh - 52px);
+        padding: 32px 16px;
     }
-</form>
+    .auth-card
+    {
+        width: 100%;
+        max-width: 400px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        padding: 40px 36px;
+    }
+    .auth-title
+    {
+        font-family: var(--font-ui);
+        font-size: 20px;
+        letter-spacing: .14em;
+        color: var(--accent);
+        text-shadow: 0 0 14px rgba(0,229,255,.35);
+        margin-bottom: 32px;
+        text-transform: uppercase;
+    }
+    .auth-field
+    {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin-bottom: 20px;
+    }
+    .auth-field label
+    {
+        font-family: var(--font-ui);
+        font-size: 10px;
+        letter-spacing: .18em;
+        text-transform: uppercase;
+        color: var(--muted);
+    }
+    .auth-field input
+    {
+        background: var(--bg);
+        border: 1px solid var(--border);
+        color: var(--text);
+        font-family: var(--font-code);
+        font-size: 14px;
+        padding: 10px 14px;
+        outline: none;
+        transition: border-color .15s, box-shadow .15s;
+        width: 100%;
+        border-radius: var(--radius);
+    }
+    .auth-field input:focus
+    {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 2px rgba(0,229,255,.12);
+    }
+    .auth-field .field-hint
+    {
+        font-size: 11px;
+        color: var(--muted);
+        letter-spacing: .04em;
+    }
+    .auth-btn
+    {
+        width: 100%;
+        margin-top: 8px;
+        font-family: var(--font-ui);
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: .18em;
+        text-transform: uppercase;
+        background: var(--accent);
+        color: var(--bg);
+        border: none;
+        padding: 12px;
+        cursor: pointer;
+        clip-path: polygon(10px 0%, 100% 0%, calc(100% - 10px) 100%, 0% 100%);
+        transition: box-shadow .2s, transform .1s;
+    }
+    .auth-btn:hover
+    {
+        box-shadow: 0 0 24px rgba(0,229,255,.5);
+        transform: translateY(-1px);
+    }
+    .auth-btn:active
+    {
+        transform: translateY(0);
+    }
+    .auth-footer
+    {
+        margin-top: 24px;
+        font-size: 12px;
+        color: var(--muted);
+        text-align: center;
+    }
+    .auth-footer a
+    {
+        color: var(--accent);
+        text-decoration: none;
+    }
+    .auth-footer a:hover
+    {
+        text-decoration: underline;
+    }
+    .auth-errors
+    {
+        margin-top: 20px;
+        padding: 12px 16px;
+        background: rgba(255,79,79,.08);
+        border: 1px solid rgba(255,79,79,.3);
+        border-radius: var(--radius);
+    }
+    .auth-errors p
+    {
+        color: var(--error);
+        font-size: 12px;
+        line-height: 1.6;
+    }
+</style>
+}
+<div class="auth-shell">
+    <div class="auth-card">
+        <div class="auth-title">Create account</div>
+        <form asp-action="Register" method="post">
+            @Html.AntiForgeryToken()
+            <div class="auth-field">
+                <label for="username">Username</label>
+                <input id="username"
+                       name="username"
+                       type="text"
+                       value="@postedUsername"
+                       autocomplete="username"
+                       minlength="3"
+                       maxlength="32"
+                       required />
+            </div>
+            <div class="auth-field">
+                <label for="email">Email address</label>
+                <input id="email"
+                       name="email"
+                       type="email"
+                       value="@postedEmail"
+                       autocomplete="email"
+                       required />
+            </div>
+            <div class="auth-field">
+                <label for="password">Password</label>
+                <input id="password"
+                       name="password"
+                       type="password"
+                       autocomplete="new-password"
+                       minlength="8"
+                       required />
+                <span class="field-hint">Minimum 8 characters</span>
+            </div>
+            <div class="auth-field">
+                <label for="confirmPassword">Confirm password</label>
+                <input id="confirmPassword"
+                       name="confirmPassword"
+                       type="password"
+                       autocomplete="new-password"
+                       required />
+            </div>
+            <button type="submit" class="auth-btn">Create account</button>
+        </form>
+        @if (!ViewData.ModelState.IsValid)
+        {// Display validation errors if the model state is invalid
+            <div class="auth-errors">
+                @foreach (var m in ViewData.ModelState.Values.SelectMany(v => v.Errors))
+                {
+                    <p>@m.ErrorMessage</p>
+                }
+            </div>
+        }
+        <div class="auth-footer">
+            Already have an account? <a href="/Account/Login">Log in</a>
+        </div>
+    </div>
+</div>

@@ -62,13 +62,13 @@ namespace webCompilerInterpreter.Services
                 // to allow to redirect the output and error streams for capture
                 var psi= new ProcessStartInfo
                 {
-                    FileName = executable,
+                    FileName= executable,
                     Arguments= buildArgs(tempPath),
                     RedirectStandardOutput= true,
-                    RedirectStandardError = true,
-                    RedirectStandardInput = false,
-                    UseShellExecute       = false,
-                    CreateNoWindow        = true,
+                    RedirectStandardError= true,
+                    RedirectStandardInput= false,
+                    UseShellExecute= false,
+                    CreateNoWindow= true,
                 };
                 // some pre start setup to capture output and error streams
                 var sw= Stopwatch.StartNew();
