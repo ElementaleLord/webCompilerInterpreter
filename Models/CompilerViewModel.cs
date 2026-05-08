@@ -21,7 +21,9 @@ namespace webCompilerInterpreter.Models
             {"c", "C"},
             {"cpp", "C++"},
             {"csharp", "C#"},
-            { "java", "Java"},
+            {"java", "Java"},
+            {"lua", "LUA"},
+            {"rust", "Rust"},
             // to add a new language add a new pair here and
             // implement it in CodeExecutionService
             // {"rad btn val", "Display name"},

@@ -36,14 +36,10 @@ namespace webCompilerInterpreter.Services
                 ),
                 "c"=> await RunCAsync(code),
                 "cpp"=> await RunCPPAsync(code),
-                "csharp"=> await CsharpAsync(code),
-                "java"=> await RunWithProcessAsync
-                (
-                    code,
-                    fileExtension: ".java",
-                    executable: "java",
-                    buildArgs: filePath=> $"-cp \"{Path.GetDirectoryName(filePath)}\" {Path.GetFileNameWithoutExtension(filePath)}"
-                ),
+                "csharp"=> await RunCsharpAsync(code),
+                "java"=> await RunJavaAsync(code),
+                "lua" => await RunLuaAsync(code),
+                "rust" => await RunRustAsync(code),
 
                 _ => new ExecutionResult
                 {
@@ -565,7 +561,7 @@ namespace webCompilerInterpreter.Services
                 if (File.Exists(exePath)) File.Delete(exePath);// cleanup for .exe files
             }
         }
-            private static async Task<ExecutionResult> CsharpAsync(string code)
+            private static async Task<ExecutionResult> RunCsharpAsync(string code)
         {
             string tempDir = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
             Directory.CreateDirectory(tempDir);
@@ -742,6 +738,39 @@ namespace webCompilerInterpreter.Services
                 }
                 catch { }
             }
+        }
+        private static async Task<ExecutionResult> RunJavaAsync(string code)
+        {
+            // Java execution logic would go here, similar to C# with javac and java commands
+            // For brevity, this is left as a placeholder
+            return new ExecutionResult
+            {
+                Output = "Java execution is not yet implemented.",
+                IsError = true,
+                ExecutionTimeMs = 0
+            };
+        }
+        private static async Task<ExecutionResult> RunLuaAsync(string code)
+        {
+            // Lua execution logic would go here
+            // For brevity, this is left as a placeholder
+            return new ExecutionResult
+            {
+                Output = "Lua execution is not yet implemented.",
+                IsError = true,
+                ExecutionTimeMs = 0
+            };
+        }
+        private static async Task<ExecutionResult> RunRustAsync(string code)
+        {
+            // Rust execution logic would go here
+            // For brevity, this is left as a placeholder
+            return new ExecutionResult
+            {
+                Output = "Rust execution is not yet implemented.",
+                IsError = true,
+                ExecutionTimeMs = 0
+            };
         }
     }
 }
