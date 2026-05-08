@@ -36,8 +36,16 @@ namespace webCompilerInterpreter.Services
                 ),
                 "c"=> await RunCAsync(code),
                 "cpp"=> await RunCPPAsync(code),
+                "csharp"=> await CsharpAsync(code),
+                "java"=> await RunWithProcessAsync
+                (
+                    code,
+                    fileExtension: ".java",
+                    executable: "java",
+                    buildArgs: filePath=> $"-cp \"{Path.GetDirectoryName(filePath)}\" {Path.GetFileNameWithoutExtension(filePath)}"
+                ),
 
-                _=> new ExecutionResult
+                _ => new ExecutionResult
                 {
                     Output= $"Language '{language}' is not supported yet.",
                     IsError= true,
@@ -47,8 +55,7 @@ namespace webCompilerInterpreter.Services
         }
         // Generic runner used for most languages
         private static async Task<ExecutionResult> RunWithProcessAsync
-            (
-                string code, string fileExtension,
+            ( string code, string fileExtension,
                 string executable, Func<string, string> buildArgs
             )
         {
@@ -243,6 +250,9 @@ namespace webCompilerInterpreter.Services
                             CreateNoWindow = true,
                         };
                         using var p = Process.Start(chmod);
+                        if (p == null ){
+                            throw new Exception("Failed to start chmod process to set execution permissions on compiled C executable.");
+                        }
                         await p.WaitForExitAsync();
                         // this is supposed to grant the .exe/bin file of
                         // the .c file execution permissions
@@ -448,7 +458,11 @@ namespace webCompilerInterpreter.Services
                             CreateNoWindow= true
                         };
 
-                        using var p= Process.Start(chmod);
+                        using var p= Process.Start(chmod); 
+                        if (p == null)
+                        {
+                            throw new Exception("Failed to start chmod process to set execution permissions on compiled C executable.");
+                        }
                         await p.WaitForExitAsync();
                         // this is supposed to grant the .exe/bin file of
                         // the .c file execution permissions
@@ -549,6 +563,184 @@ namespace webCompilerInterpreter.Services
             {// make sure to clean up temp files always
                 if (File.Exists(sourcePath)) File.Delete(sourcePath);
                 if (File.Exists(exePath)) File.Delete(exePath);// cleanup for .exe files
+            }
+        }
+            private static async Task<ExecutionResult> CsharpAsync(string code)
+        {
+            string tempDir = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+            Directory.CreateDirectory(tempDir);
+            string programPath = Path.Combine(tempDir, "Program.cs");
+            string projectPath = Path.Combine(tempDir, "TempRun.csproj");
+            string outDir = Path.Combine(tempDir, "out");
+
+            string projectContents = @"<Project Sdk=""Microsoft.NET.Sdk"">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+</Project>";
+
+            try
+            {
+                await File.WriteAllTextAsync(programPath, code);
+                await File.WriteAllTextAsync(projectPath, projectContents);
+
+                // 1) Build the project to a known output folder
+                var buildPsi = new ProcessStartInfo
+                {
+                    FileName = "dotnet",
+                    Arguments = $"build \"{projectPath}\" -c Release -o \"{outDir}\" --nologo",
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                };
+
+                var buildStdout = new System.Text.StringBuilder();
+                var buildStderr = new System.Text.StringBuilder();
+                using (var build = new Process { StartInfo = buildPsi })
+                {
+                    build.OutputDataReceived += (_, e) => { if (e.Data is not null) buildStdout.AppendLine(e.Data); };
+                    build.ErrorDataReceived += (_, e) => { if (e.Data is not null) buildStderr.AppendLine(e.Data); };
+
+                    build.Start();
+                    build.BeginOutputReadLine();
+                    build.BeginErrorReadLine();
+
+                    bool buildFinished = await build.WaitForExitAsync(new CancellationTokenSource(TimeoutMs).Token)
+                        .ContinueWith(t => !t.IsCanceled);
+                    if (!buildFinished)
+                    {
+                        try { build.Kill(entireProcessTree: true); } catch { }
+                        return new ExecutionResult
+                        {
+                            Output = $"Build timed out after {TimeoutMs / 1000} seconds.",
+                            IsError = true,
+                            ExecutionTimeMs = 0
+                        };
+                    }
+
+                    int buildExit = build.ExitCode;
+                    string bOut = buildStdout.ToString().TrimEnd();
+                    string bErr = buildStderr.ToString().TrimEnd();
+
+                    if (buildExit != 0 || !string.IsNullOrWhiteSpace(bErr))
+                    {
+                        string combined = string.IsNullOrWhiteSpace(bErr)
+                            ? (string.IsNullOrWhiteSpace(bOut) ? "(No Output Returned)" : bOut)
+                            : bErr + "\n\n--- build stdout ---\n" + (string.IsNullOrWhiteSpace(bOut) ? "(No Output Returned)" : bOut);
+
+                        return new ExecutionResult
+                        {
+                            Output = combined,
+                            IsError = true,
+                            ExecutionTimeMs = 0
+                        };
+                    }
+                }
+
+                // 2) Locate the built artifact and run it.
+                string dllPath = Path.Combine(outDir, "TempRun.dll");
+                string exePath = Path.Combine(outDir, "TempRun.exe");
+                ProcessStartInfo runPsi;
+
+                if (File.Exists(exePath) && RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                {
+                    runPsi = new ProcessStartInfo
+                    {
+                        FileName = exePath,
+                        Arguments = "",
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        UseShellExecute = false,
+                        CreateNoWindow = true
+                    };
+                }
+                else if (File.Exists(dllPath))
+                {
+                    runPsi = new ProcessStartInfo
+                    {
+                        FileName = "dotnet",
+                        Arguments = $"\"{dllPath}\"",
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        UseShellExecute = false,
+                        CreateNoWindow = true
+                    };
+                }
+                else
+                {
+                    return new ExecutionResult
+                    {
+                        Output = "Built application not found after build step.",
+                        IsError = true,
+                        ExecutionTimeMs = 0
+                    };
+                }
+
+                var sw = Stopwatch.StartNew();
+                var stdoutBuilder = new System.Text.StringBuilder();
+                var stderrBuilder = new System.Text.StringBuilder();
+                using (var run = new Process { StartInfo = runPsi })
+                {
+                    run.OutputDataReceived += (_, e) => { if (e.Data is not null) stdoutBuilder.AppendLine(e.Data); };
+                    run.ErrorDataReceived += (_, e) => { if (e.Data is not null) stderrBuilder.AppendLine(e.Data); };
+
+                    run.Start();
+                    run.BeginOutputReadLine();
+                    run.BeginErrorReadLine();
+
+                    bool finished = await run.WaitForExitAsync(new CancellationTokenSource(TimeoutMs).Token)
+                        .ContinueWith(t => !t.IsCanceled);
+                    sw.Stop();
+
+                    if (!finished)
+                    {
+                        try { run.Kill(entireProcessTree: true); } catch { }
+
+                        return new ExecutionResult
+                        {
+                            Output = $"Execution timed out after {TimeoutMs / 1000} seconds.",
+                            IsError = true,
+                            ExecutionTimeMs = sw.ElapsedMilliseconds
+                        };
+                    }
+
+                    string stdout = stdoutBuilder.ToString().TrimEnd();
+                    string stderr = stderrBuilder.ToString().TrimEnd();
+                    int exitCode = run.ExitCode;
+                    bool isError = exitCode != 0 || !string.IsNullOrWhiteSpace(stderr);
+                    string output = isError
+                        ? (string.IsNullOrWhiteSpace(stdout) ? stderr : stderr + "\n\n%%%% OUTPUT %%%%\n" + stdout)
+                        : (string.IsNullOrWhiteSpace(stdout) ? "(program produced no output)" : stdout);
+
+                    return new ExecutionResult
+                    {
+                        Output = output,
+                        IsError = isError,
+                        ExecutionTimeMs = sw.ElapsedMilliseconds
+                    };
+                }
+            }
+            catch (Exception ex)
+            {
+                return new ExecutionResult
+                {
+                    Output = $"An error occurred while compiling or running C# code:\n{ex.Message}",
+                    IsError = true,
+                    ExecutionTimeMs = 0
+                };
+            }
+            finally
+            {
+                try
+                {
+                    if (Directory.Exists(tempDir))
+                        Directory.Delete(tempDir, recursive: true);
+                }
+                catch { }
             }
         }
     }

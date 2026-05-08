@@ -223,6 +223,33 @@
             transform: rotate(360deg);
         }
     }
+     /* OUTPUT  */
+    .output-section
+    {
+        min-height: 180px;
+        max-height: 40vh;
+    }
+    .state-idle
+    {
+        color: var(--muted);
+        font-style: italic;
+    }
+    .state-sucess
+    {
+        color: var(--success);
+    }
+    .state-error
+    {
+        color: var(--error);
+    }
+    .meta-ok
+    {
+        color: var(--success);
+    }
+    .meta-err
+    {
+        color: var(--error);
+    }
     /* STUFF FOR RESPONSIVITY */
     @@media (max-width: 700px)
     {
@@ -262,11 +289,9 @@
     }
 </style>
 }
-@*
-    I use the presence of Model.Output to determine whether to show the idle state
-    This is computed server-side once per render
-*@
 @{
+    // I use the presence of Model.Output to determine whether to show the idle state
+    // This is computed server-side once per render
     string outputClass= Model.Output == null ? 
     "state-idle" : (Model.IsError ? "state-error" : "state-success");
     // double ternary to determine the appropriate CSS class for the output display based on the execution result
@@ -371,30 +396,6 @@
 
             <p id="output-display" class="@outputClass">@outputText</p>
 
-            <div class="output-meta">
-                @* 
-                    Were displaying some metadata about the execution like which 
-                    language was used and whether it was a success
-                    This is all done server side and rendered on each page load (after POST) 
-                    since we need to know the output to determine the success/error status
-                *@
-                @if (Model.Output != null)
-                {
-                    <span class="@(Model.IsError ? "meta-err" : "meta-ok")">
-                        @(Model.IsError ? "error" : "success")
-                    </span>
-                    <span>@Model.SelectedLanguage</span>
-                    @if (Model.ExecutionTimeMs.HasValue)
-                    {
-                        <span>@Model.ExecutionTimeMs ms</span>
-                    }
-                }
-                else
-                {
-                    <span>ready</span>
-                }
-            </div>
-
         </section>
     </div>
 </div>
@@ -421,7 +422,9 @@
         "js": 'console.log("Hello, World!");',
         "ts": 'console.log("Hello, World!");',
         "c": '#include <stdio.h>\n\nint main() {\n    printf("Hello, World!\\n");\n    return 0;\n}',
-        "cpp": '#include <iostream>\n\nint main() {\n    std::cout << "Hello, World!" << std::endl;\n    return 0;\n}'
+        "cpp": '#include <iostream>\n\nint main() {\n    std::cout << "Hello, World!" << std::endl;\n    return 0;\n}',
+        "csharp" : 'using System;\n\nclass Program {\n    static void Main() {\n        Console.WriteLine("Hello, World!");\n    }\n}',
+        "java" : 'public class Main {\n    public static void main(String[] args) {\n        System.out.println("Hello, World!");\n    }\n}',
     };
 
     var textarea= document.getElementById('code-input');

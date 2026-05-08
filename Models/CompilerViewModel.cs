@@ -20,6 +20,8 @@ namespace webCompilerInterpreter.Models
             {"ts", "TypeScript"},
             {"c", "C"},
             {"cpp", "C++"},
+            {"csharp", "C#"},
+            { "java", "Java"},
             // to add a new language add a new pair here and
             // implement it in CodeExecutionService
             // {"rad btn val", "Display name"},
