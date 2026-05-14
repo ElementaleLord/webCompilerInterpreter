@@ -1,203 +1,257 @@
+using System;
+using MongoDB.Bson;
+using MongoDB.Bson.Serialization.Attributes;
+using MongoDB.Driver;
 using System.Security.Cryptography;
 using System.Text;
-using System.Text.Json;
-using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 
 namespace webCompilerInterpreter.Services
 {
-    // Data model stored in the JSON file
+    // Data model for MongoDB
     public class UserAccount
     {
-        [JsonPropertyName("username")]
+        [BsonId]
+        [BsonRepresentation(BsonType.ObjectId)]
+        public string? Id { get; set; }
+
+        [BsonElement("username")]
         public string Username { get; set; } = string.Empty;
-        [JsonPropertyName("email")]
+
+        [BsonElement("email")]
         public string Email { get; set; } = string.Empty;
-        /// Base-64 encoded PBKDF2 hash of the password.
-        [JsonPropertyName("passwordHash")]
+
+        /// Base-64 encoded PBKDF2 hash of the password
+        [BsonElement("passwordHash")]
         public string PasswordHash { get; set; } = string.Empty;
-        /// Base-64 encoded random salt used when hashing this user's password. 
-        /// Each user gets a unique salt.
-        [JsonPropertyName("passwordSalt")]
+
+        /// Base-64 encoded random salt used when hashing this user's password
+        [BsonElement("passwordSalt")]
         public string PasswordSalt { get; set; } = string.Empty;
+
+        /// Track when the account was created
+        [BsonElement("createdAt")]
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     }
 
     // Service interface
     public interface IUserAccountService
     {
-        /// Creates Accounts.json with an empty user list if the file does not yet exist.
+        /// Ensures the MongoDB collection exists with proper indexes
         Task EnsureStorageExistsAsync();
 
         /// Attempts to authenticate a user by username + password
-        /// Returns the matching UserAccount on success
-        /// or null if the username does not exist or the password is wrong
+        /// Returns the matching UserAccount on success or null if authentication fails
         Task<UserAccount?> AuthenticateAsync(string username, string password);
 
         /// Registers a new user
-        /// Returns null on success, or an error message 
-        /// string if the username or e-mail is already taken
+        /// Returns null on success, or an error message string if validation fails
         Task<string?> RegisterAsync(string username, string email, string password);
     }
 
-    // Concrete implementation
+    // MongoDB implementation
     public class UserAccountService : IUserAccountService
     {
-        private readonly string _filePath;
-        // Used to prevent concurrent file access from multiple HTTP requests
-        private static readonly SemaphoreSlim _lock = new(1, 1);
-        // PBKDF2 parameters
-        private const int SaltBytes       = 16;
-        private const int HashBytes       = 32;
-        private const int Pbkdf2Iterations = 350_000;
+        private readonly IMongoDatabase _database;
+        private readonly IMongoCollection<UserAccount> _usersCollection;
 
-        private static readonly JsonSerializerOptions _jsonOpts = new()
+        // PBKDF2 parameters
+        private const int SaltBytes = 16;
+        private const int HashBytes = 32;
+        private const int Pbkdf2Iterations = 350_000;
+        private const string CollectionName = "Users";
+
+        public UserAccountService(IMongoDatabase database)
         {
-            WriteIndented = true
-        };
-        // UserAccountService
-        public UserAccountService(IWebHostEnvironment env)
-        {
-            _filePath = Path.Combine(env.ContentRootPath, "Accounts.json");
+            _database = database;
+            _usersCollection = database.GetCollection<UserAccount>(CollectionName);
         }
-        // EnsureStorageExistsAsync
+
         public async Task EnsureStorageExistsAsync()
         {
-            // If the file already exists nothing to do
-            if (File.Exists(_filePath)) return;
-            await _lock.WaitAsync();
             try
             {
-                if (!File.Exists(_filePath))
+                // Check if collection exists by iterating the async cursor returned
+                var collectionsCursor = await _database.ListCollectionNamesAsync();
+                bool collectionExists = false;
+
+                while (await collectionsCursor.MoveNextAsync())
                 {
-                    string empty = JsonSerializer.Serialize
-                        (Array.Empty<UserAccount>(), _jsonOpts);
-                    // Write an empty array so the file is valid JSON from day one
-                    await File.WriteAllTextAsync(_filePath, empty);
+                    foreach (var name in collectionsCursor.Current)
+                    {
+                        if (string.Equals(name, CollectionName, StringComparison.Ordinal))
+                        {
+                            collectionExists = true;
+                            break;
+                        }
+                    }
+                    if (collectionExists) break;
+                }
+
+                if (!collectionExists)
+                {
+                    // Create the collection
+                    await _database.CreateCollectionAsync(CollectionName);
+                }
+
+                // Create unique indexes for username and email
+                // This prevents duplicate usernames and emails at the database level
+                var indexModel = new CreateIndexModel<UserAccount>(
+                    Builders<UserAccount>.IndexKeys.Ascending(u => u.Username),
+                    new CreateIndexOptions { Unique = true }
+                );
+
+                var emailIndexModel = new CreateIndexModel<UserAccount>(
+                    Builders<UserAccount>.IndexKeys.Ascending(u => u.Email),
+                    new CreateIndexOptions { Unique = true }
+                );
+
+                try
+                {
+                    await _usersCollection.Indexes.CreateOneAsync(indexModel);
+                    await _usersCollection.Indexes.CreateOneAsync(emailIndexModel);
+                }
+                catch (MongoCommandException ex) when (ex.Code == 85)
+                {
+                    // Index already exists
                 }
             }
-            finally
+            catch (Exception ex)
             {
-                _lock.Release();
+                throw new InvalidOperationException(
+                    "Failed to initialize MongoDB user collection", ex);
             }
         }
-        // AuthenticateAsync
+
         public async Task<UserAccount?> AuthenticateAsync(string username, string password)
         {
-            var accounts = await ReadAllAsync();
-
-            // Username lookup is case-insensitive so "Admin" == "admin"
-            var account = accounts.FirstOrDefault
-                (a => string.Equals
-                    (a.Username, username, StringComparison.OrdinalIgnoreCase)
+            try
+            {
+                // Case-insensitive username lookup using MongoDB filter
+                var filter = Builders<UserAccount>.Filter.Regex(
+                    u => u.Username,
+                    new BsonRegularExpression($"^{Regex.Escape(username)}$", "i")
                 );
-            if (account is null) return null;// username not found
-            // Re-derive the hash from the supplied password + stored salt
-            // and compare to what we stored at registration time
-            bool passwordMatches = VerifyPassword
-                (password, account.PasswordHash, account.PasswordSalt);
-            return passwordMatches ? account : null;
+
+                var account = await _usersCollection.Find(filter).FirstOrDefaultAsync();
+
+                if (account is null)
+                    return null;
+
+                // Verify the password matches
+                bool passwordMatches = VerifyPassword(
+                    password, account.PasswordHash, account.PasswordSalt
+                );
+
+                return passwordMatches ? account : null;
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException(
+                    "Authentication failed due to database error", ex);
+            }
         }
-        // RegisterAsync
+
         public async Task<string?> RegisterAsync(string username, string email, string password)
         {
-            await _lock.WaitAsync();
             try
             {
-                var accounts = await ReadAllNoLockAsync();
-                // Duplicate checks
-                bool usernameTaken = accounts.Any
-                    (a => string.Equals
-                        (a.Username, username, StringComparison.OrdinalIgnoreCase)
-                    );
-                if (usernameTaken) return "Username is already taken.";
-                bool emailTaken = accounts.Any
-                    (a => string.Equals
-                        (a.Email, email, StringComparison.OrdinalIgnoreCase)
-                    );
-                if (emailTaken) return "An account with that email address already exists.";
+                // Check for existing username (case-insensitive)
+                var usernameTaken = await UsernameExistsAsync(username);
+                if (usernameTaken)
+                    return "Username is already taken.";
+
+                // Check for existing email (case-insensitive)
+                var emailTaken = await EmailExistsAsync(email);
+                if (emailTaken)
+                    return "An account with that email address already exists.";
+
                 // Hash the password
                 (string hash, string salt) = HashPassword(password);
-                accounts.Add(new UserAccount
+
+                var newUser = new UserAccount
                 {
-                    Username     = username,
-                    Email        = email,
+                    Username = username,
+                    Email = email,
                     PasswordHash = hash,
-                    PasswordSalt = salt
-                });
-                await WriteAllNoLockAsync(accounts);
-                return null;
+                    PasswordSalt = salt,
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                // Insert into MongoDB
+                await _usersCollection.InsertOneAsync(newUser);
+                return null; // Success
             }
-            finally
+            catch (MongoWriteException ex) when (ex.WriteError?.Category == ServerErrorCategory.DuplicateKey)
             {
-                _lock.Release();
+                // MongoDB unique constraint violation
+                // Determine if it was username or email
+                if (ex.Message.Contains("username"))
+                    return "Username is already taken.";
+                if (ex.Message.Contains("email"))
+                    return "An account with that email address already exists.";
+
+                return "Registration failed: username or email already in use.";
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException(
+                    "Registration failed due to database error", ex);
             }
         }
-        // Private helpers
-        /// Reads the JSON file and returns the list of accounts
-        private async Task<List<UserAccount>> ReadAllAsync()
+
+        // Private helper methods
+
+        private async Task<bool> UsernameExistsAsync(string username)
         {
-            await _lock.WaitAsync();
-            try
-            {
-                return await ReadAllNoLockAsync();
-            }
-            finally
-            {
-                _lock.Release();
-            }
+            var filter = Builders<UserAccount>.Filter.Regex(
+                u => u.Username,
+                new BsonRegularExpression($"^{Regex.Escape(username)}$", "i")
+            );
+            return await _usersCollection.Find(filter).AnyAsync();
         }
-        /// Same as ReadAllAsync but assumes the caller already holds the lock
-        private async Task<List<UserAccount>> ReadAllNoLockAsync()
+
+        private async Task<bool> EmailExistsAsync(string email)
         {
-            if (!File.Exists(_filePath)) return new List<UserAccount>();
-
-            string json = await File.ReadAllTextAsync(_filePath);
-
-            if (string.IsNullOrWhiteSpace(json)) return new List<UserAccount>();
-
-            return JsonSerializer.Deserialize<List<UserAccount>>
-                (json, _jsonOpts) ?? new List<UserAccount>();
-        }
-        /// Serialises the list back to the JSON file assumes the caller holds the lock
-        private async Task WriteAllNoLockAsync(List<UserAccount> accounts)
-        {
-            string json = JsonSerializer.Serialize(accounts, _jsonOpts);
-            await File.WriteAllTextAsync(_filePath, json);
+            var filter = Builders<UserAccount>.Filter.Regex(
+                u => u.Email,
+                new BsonRegularExpression($"^{Regex.Escape(email)}$", "i")
+            );
+            return await _usersCollection.Find(filter).AnyAsync();
         }
 
         // Password hashing
-        /// Generates a fresh random salt, derives a PBKDF2 hash from given plaintext + salt
-        /// and returns both as Base-64 strings ready to store in JSON
         private static (string hash, string salt) HashPassword(string plaintext)
         {
             byte[] saltBytes = RandomNumberGenerator.GetBytes(SaltBytes);
 
-            byte[] hashBytes = Rfc2898DeriveBytes.Pbkdf2
-                (
-                    Encoding.UTF8.GetBytes(plaintext),
-                    saltBytes,
-                    Pbkdf2Iterations,
-                    HashAlgorithmName.SHA256,
-                    HashBytes
-                );
-            return (Convert.ToBase64String(hashBytes), Convert.ToBase64String(saltBytes));
+            byte[] hashBytes = Rfc2898DeriveBytes.Pbkdf2(
+                Encoding.UTF8.GetBytes(plaintext),
+                saltBytes,
+                Pbkdf2Iterations,
+                HashAlgorithmName.SHA256,
+                HashBytes
+            );
+
+            return (
+                Convert.ToBase64String(hashBytes),
+                Convert.ToBase64String(saltBytes)
+            );
         }
-        /// Re-derives the hash from plaintext and the stored saltB64 then compares it to the
-        /// stored hashB64 using a constant-time compare to prevent timing attacks
+
         private static bool VerifyPassword(string plaintext, string hashB64, string saltB64)
         {
-            byte[] saltBytes     = Convert.FromBase64String(saltB64);
-            byte[] storedHash    = Convert.FromBase64String(hashB64);
+            byte[] saltBytes = Convert.FromBase64String(saltB64);
+            byte[] storedHash = Convert.FromBase64String(hashB64);
 
-            byte[] suppliedHash  = Rfc2898DeriveBytes.Pbkdf2
-                (
-                    Encoding.UTF8.GetBytes(plaintext),
-                    saltBytes,
-                    Pbkdf2Iterations,
-                    HashAlgorithmName.SHA256,
-                    HashBytes
-                );
-            // CryptographicOperations.FixedTimeEquals prevents timing attacks
-            // where an attacker could measure how long the compare takes.
+            byte[] suppliedHash = Rfc2898DeriveBytes.Pbkdf2(
+                Encoding.UTF8.GetBytes(plaintext),
+                saltBytes,
+                Pbkdf2Iterations,
+                HashAlgorithmName.SHA256,
+                HashBytes
+            );
+
             return CryptographicOperations.FixedTimeEquals(storedHash, suppliedHash);
         }
     }

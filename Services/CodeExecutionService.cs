@@ -217,9 +217,15 @@ namespace webCompilerInterpreter.Services
                     if (compileExit != 0 || !string.IsNullOrWhiteSpace(cErr))
                     {
                         string combined = string.IsNullOrWhiteSpace(cErr) ?
-                            (string.IsNullOrWhiteSpace(cOut) ? "(No Output Returned)" : cOut)
-                            : cErr + "\n\n--- compiler stdout ---\n" +
-                            (string.IsNullOrWhiteSpace(cOut) ? "(No Output Returned)" : cOut);
+                            (
+                                string.IsNullOrWhiteSpace(cOut) ?
+                                    "(No Output Returned)" : cOut
+                            ) :
+                            cErr + "\n\n--- compiler stdout ---\n" +
+                                (
+                                    string.IsNullOrWhiteSpace(cOut) ?
+                                    "(No Output Returned)" : cOut
+                                );
                         // double tenary to handle case of empty cerr and cOut
                         // "worst" case "(No Output Returned)" is given if both are empty
                         // "best" case is cErr + cOut if both have content with a divider in between
@@ -561,7 +567,7 @@ namespace webCompilerInterpreter.Services
                 if (File.Exists(exePath)) File.Delete(exePath);// cleanup for .exe files
             }
         }
-            private static async Task<ExecutionResult> RunCsharpAsync(string code)
+        private static async Task<ExecutionResult> RunCsharpAsync(string code)
         {
             string tempDir = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
             Directory.CreateDirectory(tempDir);
@@ -583,7 +589,7 @@ namespace webCompilerInterpreter.Services
                 await File.WriteAllTextAsync(programPath, code);
                 await File.WriteAllTextAsync(projectPath, projectContents);
 
-                // 1) Build the project to a known output folder
+                // Build the project to a known output folder
                 var buildPsi = new ProcessStartInfo
                 {
                     FileName = "dotnet",
@@ -624,9 +630,13 @@ namespace webCompilerInterpreter.Services
 
                     if (buildExit != 0 || !string.IsNullOrWhiteSpace(bErr))
                     {
-                        string combined = string.IsNullOrWhiteSpace(bErr)
-                            ? (string.IsNullOrWhiteSpace(bOut) ? "(No Output Returned)" : bOut)
-                            : bErr + "\n\n--- build stdout ---\n" + (string.IsNullOrWhiteSpace(bOut) ? "(No Output Returned)" : bOut);
+                        string combined = string.IsNullOrWhiteSpace(bErr) ?
+                            (
+                                string.IsNullOrWhiteSpace(bOut) ?
+                                "(No Output Returned)" : bOut
+                            ) :
+                            bErr + "\n\n--- build stdout ---\n" + (string.IsNullOrWhiteSpace(bOut) ?
+                                "(No Output Returned)" : bOut);
 
                         return new ExecutionResult
                         {
@@ -637,7 +647,7 @@ namespace webCompilerInterpreter.Services
                     }
                 }
 
-                // 2) Locate the built artifact and run it.
+                // Locate the built artifact and run it.
                 string dllPath = Path.Combine(outDir, "TempRun.dll");
                 string exePath = Path.Combine(outDir, "TempRun.exe");
                 ProcessStartInfo runPsi;
@@ -708,9 +718,13 @@ namespace webCompilerInterpreter.Services
                     string stderr = stderrBuilder.ToString().TrimEnd();
                     int exitCode = run.ExitCode;
                     bool isError = exitCode != 0 || !string.IsNullOrWhiteSpace(stderr);
-                    string output = isError
-                        ? (string.IsNullOrWhiteSpace(stdout) ? stderr : stderr + "\n\n%%%% OUTPUT %%%%\n" + stdout)
-                        : (string.IsNullOrWhiteSpace(stdout) ? "(program produced no output)" : stdout);
+                    string output = isError ? 
+                        (
+                            string.IsNullOrWhiteSpace(stdout) ? 
+                            stderr : stderr + "\n\n%%%% OUTPUT %%%%\n" + stdout
+                        ) :
+                        (string.IsNullOrWhiteSpace(stdout) ? 
+                            "(program produced no output)" : stdout);
 
                     return new ExecutionResult
                     {
@@ -741,14 +755,189 @@ namespace webCompilerInterpreter.Services
         }
         private static async Task<ExecutionResult> RunJavaAsync(string code)
         {
-            // Java execution logic would go here, similar to C# with javac and java commands
-            // For brevity, this is left as a placeholder
-            return new ExecutionResult
+            string tempDir = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+            string sourceFile = Path.Combine(tempDir, "Main.java");
+
+            try
             {
-                Output = "Java execution is not yet implemented.",
-                IsError = true,
-                ExecutionTimeMs = 0
-            };
+                // Create temporary directory
+                Directory.CreateDirectory(tempDir);
+
+                // Write the Java source file
+                await File.WriteAllTextAsync(sourceFile, code);
+
+                var compilePsi = new ProcessStartInfo
+                {
+                    FileName = "javac",
+                    Arguments = sourceFile,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    WorkingDirectory = tempDir
+                };
+
+                var compileStdout = new System.Text.StringBuilder();
+                var compileStderr = new System.Text.StringBuilder();
+
+                using (var compileProcess = new Process { StartInfo = compilePsi })
+                {
+                    compileProcess.OutputDataReceived += (_, e) =>
+                    {
+                        if (e.Data is not null) compileStdout.AppendLine(e.Data);
+                    };
+                    compileProcess.ErrorDataReceived += (_, e) =>
+                    {
+                        if (e.Data is not null) compileStderr.AppendLine(e.Data);
+                    };
+
+                    compileProcess.Start();
+                    compileProcess.BeginOutputReadLine();
+                    compileProcess.BeginErrorReadLine();
+
+                    // Wait for compilation with timeout
+                    bool compilationFinished = await compileProcess.WaitForExitAsync(
+                        new CancellationTokenSource(TimeoutMs).Token
+                    ).ContinueWith(t => !t.IsCanceled);
+
+                    if (!compilationFinished)
+                    {
+                        try { compileProcess.Kill(entireProcessTree: true); }
+                        catch { }
+
+                        return new ExecutionResult
+                        {
+                            Output = $"Java compilation timed out after {TimeoutMs / 1000} seconds.",
+                            IsError = true,
+                            ExecutionTimeMs = 0
+                        };
+                    }
+
+                    int compileExitCode = compileProcess.ExitCode;
+                    string compOut = compileStdout.ToString().TrimEnd();
+                    string compErr = compileStderr.ToString().TrimEnd();
+
+                    // Check for compilation errors
+                    if (compileExitCode != 0 || !string.IsNullOrWhiteSpace(compErr))
+                    {
+                        string errorOutput = string.IsNullOrWhiteSpace(compErr) ? 
+                            (
+                                string.IsNullOrWhiteSpace(compOut) ?
+                                "Compilation failed with no error message" : compOut
+                            ) :
+                            compErr + (string.IsNullOrWhiteSpace(compOut) ?
+                            "" : "\n\n--- Compilation Output ---\n" + compOut);
+
+                        return new ExecutionResult
+                        {
+                            Output = errorOutput,
+                            IsError = true,
+                            ExecutionTimeMs = 0
+                        };
+                    }
+                }
+
+                var runPsi = new ProcessStartInfo
+                {
+                    FileName = "java",
+                    Arguments = $"-cp \"{tempDir}\" Main",
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    WorkingDirectory = tempDir
+                };
+
+                var sw = Stopwatch.StartNew();
+                var stdoutBuilder = new System.Text.StringBuilder();
+                var stderrBuilder = new System.Text.StringBuilder();
+
+                using (var runProcess = new Process { StartInfo = runPsi })
+                {
+                    runProcess.OutputDataReceived += (_, e) =>
+                    {
+                        if (e.Data is not null) stdoutBuilder.AppendLine(e.Data);
+                    };
+                    runProcess.ErrorDataReceived += (_, e) =>
+                    {
+                        if (e.Data is not null) stderrBuilder.AppendLine(e.Data);
+                    };
+
+                    runProcess.Start();
+                    runProcess.BeginOutputReadLine();
+                    runProcess.BeginErrorReadLine();
+
+                    // Wait for execution with timeout
+                    bool finished = await runProcess.WaitForExitAsync(
+                        new CancellationTokenSource(TimeoutMs).Token
+                    ).ContinueWith(t => !t.IsCanceled);
+
+                    sw.Stop();
+
+                    if (!finished)
+                    {
+                        try { runProcess.Kill(entireProcessTree: true); }
+                        catch { }
+
+                        return new ExecutionResult
+                        {
+                            Output = $"Java execution timed out after {TimeoutMs / 1000} seconds.",
+                            IsError = true,
+                            ExecutionTimeMs = sw.ElapsedMilliseconds
+                        };
+                    }
+
+                    string stdout = stdoutBuilder.ToString().TrimEnd();
+                    string stderr = stderrBuilder.ToString().TrimEnd();
+                    int exitCode = runProcess.ExitCode;
+
+                    // Determine if error occurred
+                    bool isError = exitCode != 0 || !string.IsNullOrWhiteSpace(stderr);
+                    string output;
+
+                    if (isError)
+                    {
+                        output = string.IsNullOrWhiteSpace(stderr) ? 
+                            (
+                                string.IsNullOrWhiteSpace(stdout) ?
+                                "Execution failed with no error message" : stdout
+                            ) : 
+                            stderr + (string.IsNullOrWhiteSpace(stdout) ?
+                            "" : "\n\n%%%% OUTPUT %%%%\n" + stdout);
+                    }
+                    else
+                    {
+                        output = string.IsNullOrWhiteSpace(stdout) ?
+                            "(program produced no output)" : stdout;
+                    }
+
+                    return new ExecutionResult
+                    {
+                        Output = output,
+                        IsError = isError,
+                        ExecutionTimeMs = sw.ElapsedMilliseconds
+                    };
+                }
+            }
+            catch (Exception ex)
+            {
+                return new ExecutionResult
+                {
+                    Output = $"An error occurred while executing Java code:\n{ex.Message}",
+                    IsError = true,
+                    ExecutionTimeMs = 0
+                };
+            }
+            finally
+            {
+                // Clean up temporary directory
+                try
+                {
+                    if (Directory.Exists(tempDir))
+                        Directory.Delete(tempDir, recursive: true);
+                }
+                catch { }
+            }
         }
         private static async Task<ExecutionResult> RunLuaAsync(string code)
         {
