@@ -1,5 +1,4 @@
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Http;
 using webCompilerInterpreter.Services;
 
 namespace webCompilerInterpreter.Controllers
@@ -36,7 +35,7 @@ namespace webCompilerInterpreter.Controllers
             if (!ModelState.IsValid)
                 return View();
 
-            // Authenticate with Accounts.json
+            // Authenticate with Database
             var account = await _accounts.AuthenticateAsync(username, password);
 
             if (account is null)
